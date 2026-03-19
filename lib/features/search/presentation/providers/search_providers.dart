@@ -5,7 +5,9 @@ import '../../domain/repositories/search_repository.dart';
 import '../../../library/domain/entities/song.dart';
 
 final youtubeDataSourceProvider = Provider<YoutubeDataSource>((ref) {
-  return YoutubeDataSource();
+  final dataSource = YoutubeDataSource();
+  ref.onDispose(dataSource.dispose);
+  return dataSource;
 });
 
 final searchRepositoryProvider = Provider<SearchRepository>((ref) {
@@ -14,9 +16,7 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
 });
 
 /// Provider for search results using AsyncNotifier.
-final searchResultsProvider = AsyncNotifierProvider<SearchNotifier, List<Song>>(
-  SearchNotifier.new,
-);
+final searchResultsProvider = AsyncNotifierProvider<SearchNotifier, List<Song>>(SearchNotifier.new);
 
 /// Notifier managing search state.
 class SearchNotifier extends AsyncNotifier<List<Song>> {
@@ -34,20 +34,21 @@ class SearchNotifier extends AsyncNotifier<List<Song>> {
     state = const AsyncValue.loading();
     final repository = ref.read(searchRepositoryProvider);
     final result = await repository.searchTracks(query);
-    
-    result.fold(
-      (error) => state = AsyncValue.error(error.message, StackTrace.current),
-      (tracks) {
-        final songs = tracks.map((t) => Song(
-          id: t.videoId,
-          title: t.title,
-          artist: t.artist,
-          duration: t.duration,
-          thumbnailUrl: t.thumbnailUrl,
-        )).toList();
-        state = AsyncValue.data(songs);
-      }
-    );
+
+    result.fold((error) => state = AsyncValue.error(error.message, StackTrace.current), (tracks) {
+      final songs = tracks
+          .map(
+            (t) => Song(
+              id: t.videoId,
+              title: t.title,
+              artist: t.artist,
+              duration: t.duration,
+              thumbnailUrl: t.thumbnailUrl,
+            ),
+          )
+          .toList();
+      state = AsyncValue.data(songs);
+    });
   }
 
   void clear() {
