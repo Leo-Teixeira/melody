@@ -81,7 +81,7 @@ class LibraryPage extends ConsumerWidget {
                           Icon(
                             Icons.queue_music_rounded,
                             size: 64,
-                            color: AppColors.textSecondary.withOpacity(0.5),
+                            color: AppColors.textSecondary.withValues(alpha: 0.5),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -233,7 +233,7 @@ class LibraryPage extends ConsumerWidget {
         width: 50,
         height: 50,
         decoration: BoxDecoration(
-          color: iconColor.withOpacity(0.15),
+          color: iconColor.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: iconColor),

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:on_audio_query/on_audio_query.dart';
+import 'package:on_audio_query/on_audio_query.dart' as oaq;
 import '../providers/local_library_provider.dart';
+import '../../../library/domain/entities/song.dart';
 import '../../../player/presentation/providers/player_providers.dart';
 import '../../../player/presentation/pages/player_page.dart';
 import '../../../../core/connectivity/connectivity_service.dart';
@@ -39,25 +40,35 @@ class LocalLibraryPage extends ConsumerWidget {
           return ListView.builder(
             itemCount: songs.length,
             itemBuilder: (context, index) {
-              final song = songs[index];
+              final localSong = songs[index];
               return ListTile(
-                leading: QueryArtworkWidget(
-                  id: song.id,
-                  type: ArtworkType.AUDIO,
+                leading: oaq.QueryArtworkWidget(
+                  id: localSong.id,
+                  type: oaq.ArtworkType.AUDIO,
                   nullArtworkWidget: const Icon(Icons.music_note, size: 48),
                 ),
                 title: Text(
-                  song.title,
+                  localSong.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                subtitle: Text(song.artist ?? 'Artiste inconnu'),
+                subtitle: Text(localSong.artist ?? 'Artiste inconnu'),
                 onTap: () {
-                  // Lancer la lecture du fichier local
-                  ref.read(audioPlayerServiceProvider).playFile(song.data);
+                  final song = Song(
+                    id: 'local_${localSong.id}',
+                    title: localSong.title,
+                    artist: localSong.artist ?? 'Artiste inconnu',
+                    thumbnailUrl: '',
+                    duration: Duration(
+                      milliseconds: localSong.duration ?? 0,
+                    ),
+                    isDownloaded: true,
+                    localPath: localSong.data,
+                  );
+                  ref.read(playerNotifierProvider.notifier).playSong(song);
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const PlayerPage()),
+                    MaterialPageRoute(builder: (_) => const PlayerPage()),
                   );
                 },
               );

@@ -48,7 +48,7 @@ class PlaylistDetailsPage extends ConsumerWidget {
                   Icon(
                     Icons.music_note_rounded,
                     size: 64,
-                    color: AppColors.textSecondary.withOpacity(0.5),
+                    color: AppColors.textSecondary.withValues(alpha: 0.5),
                   ),
                   const SizedBox(height: 16),
                   Text(

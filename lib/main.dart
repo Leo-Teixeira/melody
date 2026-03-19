@@ -7,6 +7,7 @@ import 'features/search/presentation/pages/search_page.dart';
 import 'features/library/presentation/pages/library_page.dart';
 import 'features/player/presentation/pages/home_page.dart';
 import 'features/player/data/datasources/audio_player_service.dart';
+import 'features/search/data/datasources/youtube_datasource.dart';
 import 'shared/widgets/mini_player.dart';
 
 Future<void> main() async {
@@ -20,6 +21,7 @@ Future<void> main() async {
   
   await DatabaseService().init();
   await AudioPlayerService.instance.init();
+  await YoutubeProxyServer.instance.start();
 
   runApp(const ProviderScope(child: MelodyApp()));
 }
