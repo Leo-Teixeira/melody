@@ -16,8 +16,6 @@ class PlayerPage extends ConsumerWidget {
     final playerState = ref.watch(playerNotifierProvider);
     final notifier = ref.read(playerNotifierProvider.notifier);
     final song = playerState.currentSong;
-    print("player state duration page");
-    print(song?.duration);
     if (song == null) {
       return const Scaffold(
         body: Center(child: Text('Aucun morceau sélectionné')),
@@ -288,8 +286,6 @@ class _ProgressBar extends StatelessWidget {
     final progressValue = duration.inMilliseconds > 0
         ? position.inMilliseconds / duration.inMilliseconds
         : 0.0;
-    print("player state duration progress bar");
-    print(playerState.duration);
 
     return Column(
       children: [
@@ -321,7 +317,7 @@ class _ProgressBar extends StatelessWidget {
                 ),
               ),
               Text(
-                playerState.duration.toString(),
+                _formatDuration(playerState.duration),
                 style: const TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 12,

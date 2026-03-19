@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart' as ja;
 import '../../../library/domain/entities/song.dart';
+import '../../../library/presentation/providers/library_providers.dart';
 import '../../data/datasources/audio_player_service.dart';
 import '../../domain/entities/player_state.dart';
 import '../../../search/presentation/providers/search_providers.dart';
@@ -127,12 +128,27 @@ class PlayerNotifier extends Notifier<PlayerState> {
     await _loadAndPlay(song);
   }
 
-  /// Récupère l'URL de stream YouTube direct et l'envoie à ExoPlayer
+  /// Récupère l'URL de stream (YouTube ou fichier local) et lance la lecture.
   Future<void> _loadAndPlay(Song song) async {
     try {
+      // ── Fichier local ────────────────────────────────────────────────────
+      if (song.isDownloaded && song.localPath != null) {
+        _service.updateNotification(
+          id: song.id,
+          title: song.title,
+          artist: song.artist,
+          thumbnailUrl: song.thumbnailUrl,
+          duration: song.duration,
+        );
+        await _service.playFile(song.localPath!);
+        await _recordRecentPlay(song);
+        return;
+      }
+
+      // ── Stream YouTube via local proxy ───────────────────────────────────
       final searchRepo = ref.read(searchRepositoryProvider);
-      final result = await searchRepo.getStreamUrl(song.id);
-      
+      final result = await searchRepo.getProxyUrl(song.id);
+
       await result.fold(
         (error) async {
           state = state.copyWith(
@@ -141,6 +157,8 @@ class PlayerNotifier extends Notifier<PlayerState> {
           );
         },
         (url) async {
+          // ignore: avoid_print
+          print('[Melody] Playing via proxy: $url');
           _service.updateNotification(
             id: song.id,
             title: song.title,
@@ -148,14 +166,27 @@ class PlayerNotifier extends Notifier<PlayerState> {
             thumbnailUrl: song.thumbnailUrl,
             duration: song.duration,
           );
-          await _service.playStreamUrl(url);
-        }
+          await _service.playUrl(url);
+          await _recordRecentPlay(song);
+        },
       );
     } catch (e) {
       state = state.copyWith(
         status: PlayerStatus.error,
         errorMessage: 'Impossible de lire ce morceau: $e',
       );
+    }
+  }
+
+  /// Sauvegarde la chanson et l'ajoute aux écoutes récentes.
+  Future<void> _recordRecentPlay(Song song) async {
+    try {
+      final repo = ref.read(libraryRepositoryProvider);
+      await repo.saveSong(song);
+      await repo.addToRecentPlays(type: 'song', referenceId: song.id);
+      ref.invalidate(recentPlaysProvider);
+    } catch (_) {
+      // Non-bloquant : on ignore les erreurs de persistance
     }
   }
 

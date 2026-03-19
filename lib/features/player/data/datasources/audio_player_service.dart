@@ -30,6 +30,7 @@ class AudioPlayerService {
   Future<void> init() async {
     if (_isInitialized) return;
 
+    // Default constructor — proxy must stay active for StreamAudioSource to work.
     _player = AudioPlayer();
 
     final session = await AudioSession.instance;
@@ -51,18 +52,11 @@ class AudioPlayerService {
 
   // ==================== PLAYBACK ACTIONS ====================
 
-  /// Play an audio stream directly from a URL
-  Future<void> playStreamUrl(String url) async {
-    print('AudioPlayerService: playStreamUrl called');
-
-    try {
-      await _player.stop();
-      await _player.setUrl(url);
-      await _player.play();
-    } catch (e) {
-      print('AudioPlayerService: Error playing stream: $e');
-      rethrow;
-    }
+  /// Play from a URL (can be localhost proxy or local file URI).
+  Future<void> playUrl(String url) async {
+    await _player.stop();
+    await _player.setUrl(url);
+    await _player.play();
   }
 
   /// Play from a local file path.
