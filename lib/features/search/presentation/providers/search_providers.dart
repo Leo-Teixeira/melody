@@ -48,6 +48,13 @@ class SearchNotifier extends AsyncNotifier<List<Song>> {
           )
           .toList();
       state = AsyncValue.data(songs);
+
+      // Pre-fetch manifests for the first 5 results in the background.
+      // If the user taps one, the stream is already cached → instant play.
+      final dataSource = ref.read(youtubeDataSourceProvider);
+      for (final song in songs.take(5)) {
+        dataSource.prefetchManifest(song.id);
+      }
     });
   }
 

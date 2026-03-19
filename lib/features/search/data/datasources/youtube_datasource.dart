@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import '../../../../core/utils/database_service.dart';
 
 class YoutubeException implements Exception {
   final String message;
@@ -21,6 +22,8 @@ class YoutubeException implements Exception {
 ///      the request to the pre-resolved YouTube URL with correct headers.
 ///
 /// This way ExoPlayer never waits for manifest resolution → no timeout.
+/// The resolved stream URLs are also persisted in Hive so they survive
+/// app restarts (TTL: 5h, matching YouTube URL expiration).
 class YoutubeProxyServer {
   static YoutubeProxyServer? _instance;
   static YoutubeProxyServer get instance => _instance ??= YoutubeProxyServer._();
@@ -31,7 +34,7 @@ class YoutubeProxyServer {
   final YoutubeExplode _yt = YoutubeExplode();
   int _port = 0;
 
-  // Cache: videoId → resolved stream info
+  // In-memory cache: videoId → resolved stream info
   final Map<String, _ResolvedStream> _cache = {};
 
   int get port => _port;
@@ -39,6 +42,7 @@ class YoutubeProxyServer {
 
   Future<void> start() async {
     if (_server != null) return;
+    _loadCacheFromHive();
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     _port = _server!.port;
     print('[Melody] YoutubeProxyServer started on port $_port');
@@ -50,6 +54,49 @@ class YoutubeProxyServer {
     );
   }
 
+  /// Restore non-expired entries from Hive into the in-memory cache.
+  void _loadCacheFromHive() {
+    final db = DatabaseService();
+    if (!db.isInitialized) return;
+    final box = db.streamCacheBox;
+    final now = DateTime.now();
+    final toDelete = <dynamic>[];
+
+    for (final key in box.keys) {
+      try {
+        final data = Map<String, dynamic>.from(box.get(key) as Map);
+        final expiresAt = DateTime.parse(data['expires_at'] as String);
+        if (expiresAt.isAfter(now)) {
+          _cache[key as String] = _ResolvedStream(
+            url: Uri.parse(data['url'] as String),
+            mimeType: data['mime_type'] as String,
+            totalBytes: data['total_bytes'] as int,
+            expiresAt: expiresAt,
+          );
+        } else {
+          toDelete.add(key);
+        }
+      } catch (_) {
+        toDelete.add(key);
+      }
+    }
+
+    for (final key in toDelete) {
+      box.delete(key);
+    }
+    print('[Melody] Loaded ${_cache.length} cached streams from Hive');
+  }
+
+  /// Persist a resolved stream to Hive.
+  Future<void> _saveCacheToHive(String videoId, _ResolvedStream stream) async {
+    await DatabaseService().streamCacheBox.put(videoId, {
+      'url': stream.url.toString(),
+      'mime_type': stream.mimeType,
+      'total_bytes': stream.totalBytes,
+      'expires_at': stream.expiresAt.toIso8601String(),
+    });
+  }
+
   Future<void> stop() async {
     await _server?.close(force: true);
     _server = null;
@@ -58,9 +105,11 @@ class YoutubeProxyServer {
 
   /// Step 1: Resolve the YouTube stream BEFORE calling just_audio.
   /// Must be called before [urlFor].
+  /// Returns immediately if a valid (non-expired) entry is already cached.
   Future<void> prepareVideo(String videoId) async {
     if (_cache[videoId]?.isExpired == true) {
       _cache.remove(videoId);
+      await DatabaseService().streamCacheBox.delete(videoId);
     }
     if (_cache.containsKey(videoId)) return;
 
@@ -76,19 +125,20 @@ class YoutubeProxyServer {
         ? mp4Streams.reduce((a, b) => a.bitrate.bitsPerSecond > b.bitrate.bitsPerSecond ? a : b)
         : manifest.audioOnly.withHighestBitrate();
 
-    // Get the direct YouTube stream URL
     final streamUri = streamInfo.url;
     print(
       '[Melody] Resolved stream for $videoId: ${streamInfo.codec.mimeType} '
       '${streamInfo.size.totalBytes} bytes',
     );
 
-    _cache[videoId] = _ResolvedStream(
+    final resolved = _ResolvedStream(
       url: streamUri,
       mimeType: streamInfo.codec.mimeType,
       totalBytes: streamInfo.size.totalBytes,
       expiresAt: DateTime.now().add(const Duration(hours: 5)),
     );
+    _cache[videoId] = resolved;
+    await _saveCacheToHive(videoId, resolved);
   }
 
   /// Step 2: Returns the localhost URL to pass to just_audio.
@@ -195,6 +245,12 @@ class YoutubeDataSource {
     } catch (e) {
       throw YoutubeException('Failed to search tracks: $e');
     }
+  }
+
+  /// Fire-and-forget pre-fetch: resolves and caches the manifest silently.
+  /// Errors are swallowed — this is best-effort only.
+  void prefetchManifest(String videoId) {
+    YoutubeProxyServer.instance.prepareVideo(videoId).catchError((_) {});
   }
 
   /// Resolves the YouTube stream and returns the proxy URL.

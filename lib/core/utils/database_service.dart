@@ -10,6 +10,7 @@ class DatabaseService {
   DatabaseService._internal();
 
   bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
 
   // Box references (equivalent to tables)
   late final Box<Map<dynamic, dynamic>> _songsBox;
@@ -18,6 +19,7 @@ class DatabaseService {
   late final Box<Map<dynamic, dynamic>>
   _playlistSongsBox; // Junction-like logic
   late final Box<Map<dynamic, dynamic>> _recentPlaysBox;
+  late final Box<Map<dynamic, dynamic>> _streamCacheBox;
 
   // Accessors
   Box<Map<dynamic, dynamic>> get songsBox => _songsBox;
@@ -25,6 +27,7 @@ class DatabaseService {
   Box<Map<dynamic, dynamic>> get playlistsBox => _playlistsBox;
   Box<Map<dynamic, dynamic>> get playlistSongsBox => _playlistSongsBox;
   Box<Map<dynamic, dynamic>> get recentPlaysBox => _recentPlaysBox;
+  Box<Map<dynamic, dynamic>> get streamCacheBox => _streamCacheBox;
 
   Future<void> init() async {
     if (_isInitialized) return;
@@ -41,6 +44,7 @@ class DatabaseService {
       'playlist_songs',
     );
     _recentPlaysBox = await Hive.openBox<Map<dynamic, dynamic>>('recent_plays');
+    _streamCacheBox = await Hive.openBox<Map<dynamic, dynamic>>('stream_cache');
 
     _isInitialized = true;
   }
